@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskMind — AI Desktop Organizer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #22222f;
+    --accent: #7c6af7;
+    --accent2: #f2a65a;
+    --accent3: #5af2c8;
+    --text: #e8e8f0;
+    --muted: #6b6b85;
+    --danger: #f25a7a;
+  }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* Ambient glow */
+  .glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-orb.one { width: 500px; height: 500px; background: rgba(124,106,247,0.08); top: -100px; left: -100px; }
+  .glow-orb.two { width: 400px; height: 400px; background: rgba(90,242,200,0.05); bottom: 0; right: -100px; }
+
+  /* Layout */
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+  }
+
+  /* Header */
+  header {
+    padding: 40px 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .logo-mark {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    box-shadow: 0 0 30px rgba(124,106,247,0.4);
+  }
+
+  .logo-text h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .logo-text span {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .status-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(90,242,200,0.08);
+    border: 1px solid rgba(90,242,200,0.2);
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent3);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    background: var(--accent3);
+    border-radius: 50%;
+    animation: pulse 2s ease infinite;
+  }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    animation: fadeUp 0.7s ease 0.1s both;
+  }
+
+  @media (max-width: 700px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Chat panel */
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .chat-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(22,22,31,0.8);
+  }
+
+  .chat-header .icon { font-size: 16px; }
+  .chat-header h2 { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+  .chat-window {
+    flex: 1;
+    min-height: 380px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  .chat-window::-webkit-scrollbar { width: 4px; }
+  .chat-window::-webkit-scrollbar-track { background: transparent; }
+  .chat-window::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 10px;
+    animation: msgIn 0.3s ease both;
+  }
+
+  .msg.user { flex-direction: row-reverse; }
+
+  .msg-avatar {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .msg.ai .msg-avatar { background: linear-gradient(135deg, var(--accent), var(--accent3)); }
+  .msg.user .msg-avatar { background: var(--surface); border: 1px solid var(--border); }
+
+  .msg-bubble {
+    max-width: 80%;
+    padding: 12px 15px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .msg.ai .msg-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg.user .msg-bubble {
+    background: var(--accent);
+    color: white;
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .typing-dot {
+    width: 6px; height: 6px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: typingBounce 1.2s ease infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  /* Input area */
+  .chat-input-area {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: rgba(22,22,31,0.8);
+  }
+
+  .chat-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    padding: 12px 15px;
+    border-radius: 12px;
+    outline: none;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    transition: border-color 0.2s;
+  }
+
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-input::placeholder { color: var(--muted); }
+
+  .send-btn {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: white;
+    font-size: 18px;
+    display: grid;
+    place-items: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .send-btn:hover { background: #9585f9; transform: scale(1.05); }
+  .send-btn:active { transform: scale(0.96); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Right sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Quick actions */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-header h3 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .quick-actions {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .qa-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+
+  .qa-btn:hover {
+    border-color: var(--accent);
+    background: rgba(124,106,247,0.08);
+    transform: translateX(2px);
+  }
+
+  .qa-btn .qa-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* Stats */
+  .stats-grid {
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .stat-value {
+    font-family: 'Instrument Serif', serif;
+    font-size: 26px;
+    line-height: 1;
+    color: var(--accent);
+  }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Progress bar */
+  .progress-section { padding: 14px; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--surface);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  /* Suggestions chips */
+  .suggestions {
+    padding: 8px 20px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(124,106,247,0.06);
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow-orb one"></div>
+<div class="glow-orb two"></div>
+
+<div class="app">
+
+  <header>
+    <div class="logo-mark">🗂️</div>
+    <div class="logo-text">
+      <h1>DeskMind</h1>
+      <span>AI Desktop Organizer</span>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      Online
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span class="icon">💬</span>
+        <h2>Assistant</h2>
+      </div>
+
+      <div class="chat-window" id="chatWindow">
+        <div class="msg ai">
+          <div class="msg-avatar">🤖</div>
+          <div>
+            <div class="msg-bubble">
+              Hey! I'm <strong>DeskMind</strong>, your personal desktop organizer. 🗂️<br><br>
+              I can help you figure out how to organize your files, folders, desktop shortcuts, and downloads. Tell me about your current setup and I'll give you a personalized plan!
+            </div>
+            <div class="msg-time">Just now</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="suggestions" id="suggestions">
+        <div class="chip" onclick="useSuggestion(this)">My desktop is a mess 😅</div>
+        <div class="chip" onclick="useSuggestion(this)">How to organize Downloads?</div>
+        <div class="chip" onclick="useSuggestion(this)">Best folder structure</div>
+        <div class="chip" onclick="useSuggestion(this)">Naming conventions for files</div>
+      </div>
+
+      <div class="chat-input-area">
+        <textarea
+          class="chat-input"
+          id="userInput"
+          placeholder="Describe your desktop situation..."
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Quick Actions -->
+      <div class="card">
+        <div class="card-header">
+          <span>⚡</span>
+          <h3>Quick Actions</h3>
+        </div>
+        <div class="quick-actions">
+          <button class="qa-btn" onclick="quickAction('Give me a complete desktop organization system')">
+            <span class="qa-icon">🗄️</span> Full Organization Plan
+          </button>
+          <button class="qa-btn" onclick="quickAction('How should I organize my Downloads folder?')">
+            <span class="qa-icon">📥</span> Fix Downloads Folder
+          </button>
+          <button class="qa-btn" onclick="quickAction('What files can I safely delete to free up space?')">
+            <span class="qa-icon">🧹</span> Clean Up Space
+          </button>
+          <button class="qa-btn" onclick="quickAction('Give me a file naming convention system')">
+            <span class="qa-icon">🏷️</span> Naming Conventions
+          </button>
+          <button class="qa-btn" onclick="quickAction('How to maintain a clean desktop long-term?')">
+            <span class="qa-icon">✅</span> Stay Organized
+          </button>
+        </div>
+      </div>
+
+      <!-- Organization Score -->
+      <div class="card">
+        <div class="card-header">
+          <span>📊</span>
+          <h3>Organization Score</h3>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="score">—</div>
+            <div class="stat-label">Score</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="tips">0</div>
+            <div class="stat-label">Tips Given</div>
+          </div>
+        </div>
+        <div class="progress-section">
+          <div class="progress-label">
+            <span>Desktop Cleanliness</span>
+            <span id="cleanPct">—</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="cleanBar" style="width:0%; background: linear-gradient(90deg, var(--accent), var(--accent3));"></div>
+          </div>
+          <div class="progress-label">
+            <span>Folder Structure</span>
+            <span id="folderPct">—</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="folderBar" style="width:0%; background: linear-gradient(90deg, var(--accent2), var(--accent));"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const SYSTEM_PROMPT = `You are DeskMind, an expert AI assistant specialized in desktop and file organization. Your personality is helpful, practical, and encouraging. You give actionable, specific advice.
+
+Your expertise covers:
+- Desktop organization (Windows, Mac, Linux)
+- Folder structure best practices
+- File naming conventions
+- Downloads/Documents/Pictures folder management
+- Shortcuts and productivity tips
+- Regular maintenance routines
+- Cloud storage integration
+- Dealing with duplicates and junk files
+
+When giving advice:
+- Be specific and actionable (avoid vague tips)
+- Use emojis sparingly to make responses readable
+- Suggest concrete folder names and structures
+- Give step-by-step instructions when needed
+- Adapt advice to what the user tells you about their situation
+- Keep responses concise but complete (3-6 paragraphs max)
+- If helpful, use short lists or simple structures
+
+Also, when you feel you have enough context about someone's desktop situation, naturally include ONE of these scores at the very end of your message as a JSON comment (don't show it as a code block, hide it as an HTML comment):
+<!-- SCORE: {"desk":65,"folder":40} -->
+The values should be 0-100 based on your assessment of their organization. Only include this if you have enough info to estimate. Just ONE comment per message.`;
+
+  let msgCount = 0;
+  let tipsCount = 0;
+  let isLoading = false;
+
+  function getTime() {
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function useSuggestion(el) {
+    document.getElementById('userInput').value = el.textContent;
+    document.getElementById('suggestions').style.display = 'none';
+    sendMessage();
+  }
+
+  function quickAction(text) {
+    document.getElementById('userInput').value = text;
+    sendMessage();
+  }
+
+  function appendMsg(role, text) {
+    const win = document.getElementById('chatWindow');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar';
+    avatar.textContent = role === 'ai' ? '🤖' : '👤';
+
+    const inner = document.createElement('div');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    const time = document.createElement('div');
+    time.className = 'msg-time';
+    time.textContent = getTime();
+
+    inner.appendChild(bubble);
+    inner.appendChild(time);
+    div.appendChild(avatar);
+    div.appendChild(inner);
+    win.appendChild(div);
+    win.scrollTop = win.scrollHeight;
+    return div;
+  }
+
+  function showTyping() {
+    const win = document.getElementById('chatWindow');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.id = 'typingMsg';
+    div.innerHTML = `
+      <div class="msg-avatar">🤖</div>
+      <div>
+        <div class="msg-bubble">
+          <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>`;
+    win.appendChild(div);
+    win.scrollTop = win.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typingMsg');
+    if (t) t.remove();
+  }
+
+  function updateScore(text) {
+    const match = text.match(/<!--\s*SCORE:\s*(\{[^}]+\})\s*-->/);
+    if (match) {
+      try {
+        const s = JSON.parse(match[1]);
+        const avg = Math.round((s.desk + s.folder) / 2);
+        document.getElementById('score').textContent = avg + '/100';
+        document.getElementById('cleanPct').textContent = s.desk + '%';
+        document.getElementById('folderPct').textContent = s.folder + '%';
+        setTimeout(() => {
+          document.getElementById('cleanBar').style.width = s.desk + '%';
+          document.getElementById('folderBar').style.width = s.folder + '%';
+        }, 100);
+      } catch(e) {}
+    }
+  }
+
+  let conversationHistory = [];
+
+  async function sendMessage() {
+    if (isLoading) return;
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    document.getElementById('suggestions').style.display = 'none';
+    document.getElementById('sendBtn').disabled = true;
+    isLoading = true;
+
+    appendMsg('user', text);
+    conversationHistory.push({ role: 'user', content: text });
+
+    showTyping();
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: conversationHistory
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.content?.map(b => b.text || '').join('') || 'Sorry, I had trouble responding. Please try again.';
+
+      removeTyping();
+
+      // Strip the hidden score comment from display
+      const displayText = reply.replace(/<!--\s*SCORE:[^>]+-->/g, '').trim();
+      appendMsg('ai', displayText);
+
+      conversationHistory.push({ role: 'assistant', content: reply });
+      updateScore(reply);
+
+      tipsCount++;
+      document.getElementById('tips').textContent = tipsCount;
+
+    } catch (err) {
+      removeTyping();
+      appendMsg('ai', '⚠️ Connection issue. Make sure you\'re running this in a supported environment.');
+      console.error(err);
+    }
+
+    isLoading = false;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('userInput').focus();
+  }
+</script>
+
+</body>
+</html>
