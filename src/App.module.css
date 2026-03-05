@@ -1,0 +1,49 @@
+.app {
+  position: relative;
+  min-height: 100vh;
+}
+
+.glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glowOne {
+  width: 500px;
+  height: 500px;
+  background: rgba(124, 106, 247, 0.08);
+  top: -100px;
+  left: -100px;
+}
+
+.glowTwo {
+  width: 400px;
+  height: 400px;
+  background: rgba(90, 242, 200, 0.05);
+  bottom: 0;
+  right: -100px;
+}
+
+.inner {
+  position: relative;
+  z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  animation: fadeUp 0.7s ease 0.1s both;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
